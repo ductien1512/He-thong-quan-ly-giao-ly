@@ -1,2 +1,2 @@
-# H-th-ng-qu-n-l-gi-o-l-
+# He thong quan ly giao ly
 quản lý giáo lý
