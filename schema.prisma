@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User Accounts
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  role          Role     @default(GLV)
+  passwordHash  String?
+  isActive      Boolean  @default(true)
+  
+  // Relations
+  parish      Parish?       @relation(fields: [parishId], references: [id])
+  parishId    String?
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Indexes
+  @@index([email])
+  @@index([role])
+}
+
+// Parish (Giáo xứ)
+model Parish {
+  id        String    @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  
+  // Relations
+  users     User[]
+  students  Student[]
+  classes   Class[]
+  
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  // Indexes
+  @@index([name])
+}
+
+// Student (Học sinh)
+model Student {
+  id           String    @id @default(cuid())
+  code         String?   @unique
+  saintName    String?
+  fullName     String
+  dateOfBirth  DateTime?
+  baptismDate  DateTime?
+  gender       String?
+  avatar       String?
+  
+  // Contact Information
+  guardians    Guardian[]
+  
+  // Parish Info
+  parish      Parish?   @relation(fields: [parishId], references: [id])
+  parishId    String?
+  subParish   String?
+  
+  // Class Info
+  classHistory StudentClass[]
+  
+  // Academic
+  attendances  Attendance[]
+  grades       Grade[]
+  
+  // Status
+  isActive     Boolean   @default(true)
+  notes        String?
+  
+  // Timestamps
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  // Indexes
+  @@index([fullName])
+  @@index([parishId])
+  @@index([isActive])
+}
+
+// Guardian (Phụ huynh)
+model Guardian {
+  id           String   @id @default(cuid())
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String
+  relationship String   // Father, Mother, etc.
+  fullName     String
+  phone        String
+  email        String?
+  isPrimary    Boolean  @default(false)
+  notes        String?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Indexes
+  @@index([studentId])
+  @@index([phone])
+}
+
+// Class (Lớp học)
+model Class {
+  id          String    @id @default(cuid())
+  name        String    // Lớp Chiên Ngoan 1
+  gradeLevel  String    // Khối: Thiếu nhi, Kinh Thánh, Vào đời
+  schoolYear  String    // 2024-2025
+  room        String?
+  
+  // Teacher
+  teacher     User?     @relation(fields: [teacherId], references: [id])
+  teacherId   String?
+  
+  // Parish
+  parish      Parish?   @relation(fields: [parishId], references: [id])
+  parishId    String?
+  
+  // Relations
+  students    StudentClass[]
+  sessions    Session[]
+  gradeTypes  GradeType[]
+  
+  // Status
+  isActive    Boolean   @default(true)
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Indexes
+  @@unique([name, schoolYear])
+  @@index([gradeLevel])
+  @@index([schoolYear])
+}
+
+// Student-Class Relationship (Many-to-Many with history)
+model StudentClass {
+  id         String   @id @default(cuid())
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId    String
+  schoolYear String
+  status     StudentClassStatus @default(ACTIVE)
+  
+  // Timestamps
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Unique constraint
+  @@unique([studentId, classId, schoolYear])
+  @@index([studentId])
+  @@index([classId])
+}
+
+// Session (Buổi học)
+model Session {
+  id           String   @id @default(cuid())
+  class        Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId      String
+  date         DateTime
+  sessionNumber Int
+  topic        String?
+  isCompleted  Boolean  @default(false)
+  
+  // Relations
+  attendances  Attendance[]
+  report       SessionReport?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Indexes
+  @@unique([classId, date])
+  @@index([date])
+  @@index([classId])
+}
+
+// Attendance (Điểm danh)
+model Attendance {
+  id        String           @id @default(cuid())
+  session   Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  status    AttendanceStatus @default(PRESENT)
+  note      String?
+  
+  // Timestamps
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  
+  // Unique constraint
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([studentId])
+}
+
+// Session Report (Sổ đầu bài)
+model SessionReport {
+  id              String   @id @default(cuid())
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId       String   @unique
+  
+  // Lesson Info
+  lessonContent   String?
+  activities      String?
+  materials       String?
+  actualStudents  Int?
+  
+  // Evaluation
+  rating          Int?     @default(3) // 1-5 stars
+  ratingNotes     String?
+  
+  // Confirmation
+  confirmedBy     User?    @relation(fields: [confirmedById], references: [id])
+  confirmedById   String?
+  confirmedAt     DateTime?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Grade Type (Loại điểm)
+model GradeType {
+  id        String  @id @default(cuid())
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId   String
+  name      String  // "Điểm 15 phút", "Điểm miệng", "Điểm 1 tiết", "Điểm học kỳ"
+  weight    Float   @default(1.0)
+  maxScore  Float   @default(10.0)
+  order     Int
+  isActive  Boolean @default(true)
+  
+  // Relations
+  grades    Grade[]
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Indexes
+  @@index([classId])
+}
+
+// Grade (Điểm số)
+model Grade {
+  id          String    @id @default(cuid())
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  gradeType   GradeType @relation(fields: [gradeTypeId], references: [id], onDelete: Cascade)
+  gradeTypeId String
+  class       Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  score       Float
+  notes       String?
+  
+  // Optional session link
+  session     Session?  @relation(fields: [sessionId], references: [id])
+  sessionId   String?
+  
+  // Timestamps
+  recordedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Unique constraint
+  @@unique([studentId, gradeTypeId, sessionId])
+  @@index([studentId])
+  @@index([gradeTypeId])
+  @@index([classId])
+}
+
+// Teaching Schedule (Báo giảng)
+model TeachingSchedule {
+  id          String         @id @default(cuid())
+  teacher     User           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  date        DateTime
+  lessonTitle String?
+  lessonNotes String?
+  materials   String?
+  status      ScheduleStatus @default(PLANNED)
+  
+  // Timestamps
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Indexes
+  @@index([teacherId])
+  @@index([classId])
+  @@index([date])
+}
+
+// ========== ENUMS ==========
+enum Role {
+  SUPER_ADMIN
+  PARISH_ADMIN
+  GLV
+  STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT_WITH_REASON
+  ABSENT_NO_REASON
+  LATE
+  EXCUSED
+}
+
+enum StudentClassStatus {
+  ACTIVE
+  TRANSFERRED
+  GRADUATED
+  INACTIVE
+}
+
+enum ScheduleStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
